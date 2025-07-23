@@ -1,90 +1,780 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mi Geoportal</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .container {
-            text-align: center;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 40px;
-            border-radius: 15px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            max-width: 500px;
-        }
-        
-        h1 {
-            color: #2c3e50;
-            margin-bottom: 20px;
-            font-size: 2.5em;
-        }
-        
-        .subtitle {
-            color: #34495e;
-            font-size: 1.2em;
-            margin-bottom: 30px;
-        }
-        
-        .icon {
-            font-size: 4em;
-            margin-bottom: 20px;
-        }
-        
-        .features {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 30px;
-        }
-        
-        .feature {
-            text-align: center;
-            padding: 10px;
-        }
-        
-        .feature-icon {
-            font-size: 2em;
-            margin-bottom: 10px;
-        }
-        
-        .feature-text {
-            font-size: 0.9em;
-            color: #7f8c8d;
-        }
-    </style>
+<title>Geoportal Supabase - Loja</title>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" rel="stylesheet"/>
+<style>
+    body { display: flex; font-family: sans-serif; margin: 0; }
+    #sidebar { width: 300px; padding: 1em; background: #f7f7f7; border-right: 1px solid #ccc; overflow-y: auto; }
+    #map { flex: 1; height: 100vh; }
+    .layer-toggle button { width: 100%; margin: 0.2em 0; padding: 0.5em; border: none; border-radius: 4px; cursor: pointer; }
+    .layer-toggle button.active { background-color: #007cba; color: white; }
+    .layer-toggle button:not(.active) { background-color: #e9ecef; color: #333; }
+    .blinking-icon {
+      animation: blink 1s infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+    #debug-info {
+      background: #fff3cd;
+      border: 1px solid #ffeaa7;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    #formulario-reporte {
+      display: none;
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      z-index: 10000;
+      max-width: 400px;
+    }
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="icon">🌍</div>
-        <h1>¡Hola Mundo!</h1>
-        <p class="subtitle">Bienvenido a mi Geoportal</p>
-        <p>Este es mi sitio web donde comparto información geoespacial y mapas interactivos.</p>
-        
-        <div class="features">
-            <div class="feature">
-                <div class="feature-icon">🗺️</div>
-                <div class="feature-text">Mapas</div>
-            </div>
-            <div class="feature">
-                <div class="feature-icon">📊</div>
-                <div class="feature-text">Datos</div>
-            </div>
-            <div class="feature">
-                <div class="feature-icon">🛰️</div>
-                <div class="feature-text">Análisis</div>
-            </div>
+<div id="sidebar">
+<h2>Farmacias Turno - Loja</h2>
+<a href="https://www.controlsanitario.gob.ec/turnos-de-farmacias-arcsa-2025/" target="_blank">
+  <img alt="ARCSA - Agencia Nacional de Regulación, Control y Vigilancia Sanitaria" 
+       src="https://www.controlsanitario.gob.ec/wp-content/uploads/2019/03/logo-arcsa-2019.png" 
+       style="width:150px; display:block; margin:10px auto; cursor:pointer; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1);" 
+       onError="this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/2/29/Logo_ARCSA.svg/512px-Logo_ARCSA.svg.png'"
+       title="Ir a turnos de farmacias ARCSA 2025"/>
+</a>
+
+<div class="layer-toggle">
+<h3>Capas</h3>
+<button class="active" id="btn-farmacias" onclick="toggleCapa('farmacias', this)">💊 Farmacias</button>
+<button class="active" id="btn-cantones" onclick="toggleCapa('cantones', this)">🗺️ Cantones</button>
+<button class="active" id="btn-salud" onclick="toggleCapa('salud', this)">🏥 Salud</button>
+<button class="active" id="btn-laboratorios" onclick="toggleCapa('laboratorios', this)">🧪 Laboratorios</button>
+<button class="active" id="btn-provincias" onclick="toggleCapa('provincias', this)">🗺️ Provincias EC</button>
+</div>
+
+<div id="debug-info">
+<strong>Debug Info:</strong><br/>
+<div id="debug-content">🔄 Iniciando aplicación...</div>
+</div>
+
+<div style="margin-top: 20px;">
+<button onclick="recargarDatos()" style="width: 100%; padding: 10px; background: #28a745; color: white; border: none; border-radius: 4px;">
+  🔄 Recargar Datos
+</button>
+</div>
+</div>
+
+<div id="map"></div>
+
+<!-- Formulario de reporte -->
+<div id="formulario-reporte">
+<h3>📢 Reportar problema</h3>
+<p id="info-farmacia"></p>
+<label>Tipo de problema:</label><br/>
+<select id="tipo-problema" style="width:100%; margin-bottom:10px;">
+<option value="Farmacia cerrada">Farmacia cerrada</option>
+<option value="No cumple horario establecido">No cumple horario</option>
+<option value="Medicamento caducado">Medicamento caducado</option>
+<option value="Sobreprecio">Sobreprecio</option>
+<option value="Otro">Otro</option>
+</select><br/>
+<label>Observaciones:</label><br/>
+<textarea id="observaciones" rows="3" style="width:100%; margin-bottom:10px;"></textarea><br/>
+<input id="nombre-farmacia" type="hidden"/>
+<input id="lat-farmacia" type="hidden"/>
+<input id="lon-farmacia" type="hidden"/>
+<button onclick="enviarFormulario()" style="padding:6px 10px; background:#28a745; color:white; border:none; border-radius:4px;">✅ Enviar</button>
+<button onclick="cerrarFormulario()" style="margin-left:10px; padding:6px 10px;">❌ Cancelar</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// Configuración global
+const supabaseUrl = 'https://lhvacyqskqzfvsyrpdkp.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxodmFjeXFza3F6ZnZzeXJwZGtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI3MTEwNjcsImV4cCI6MjA2ODI4NzA2N30.G6KMCSEIwboskrCMYad4B8_YlYYFlylJMkhYzTsKmV8';
+
+// Variables globales
+let map;
+let capas = {};
+
+// Funciones de utilidad
+function addDebugInfo(message) {
+  const debugContent = document.getElementById('debug-content');
+  if (debugContent) {
+    debugContent.innerHTML += '<br>' + message;
+    debugContent.scrollTop = debugContent.scrollHeight;
+  }
+  console.log(message);
+}
+
+// Inicializar mapa y capas
+function initializeMap() {
+  addDebugInfo('🗺️ Inicializando mapa...');
+  
+  map = L.map('map').setView([-4.036, -79.201], 10);
+  
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 18
+  }).addTo(map);
+
+  // Crear todas las capas
+  capas = {
+    farmacias: L.layerGroup().addTo(map),
+    cantones: L.layerGroup().addTo(map),
+    salud: L.layerGroup().addTo(map),
+    laboratorios: L.layerGroup().addTo(map),
+    provincias: L.layerGroup().addTo(map)
+  };
+
+  addDebugInfo('✅ Mapa y capas inicializados');
+}
+
+// Función para alternar capas
+function toggleCapa(nombreCapa, btn) {
+  const capa = capas[nombreCapa];
+  if (!capa) {
+    addDebugInfo(`❌ Capa ${nombreCapa} no encontrada`);
+    return;
+  }
+
+  if (map.hasLayer(capa)) {
+    map.removeLayer(capa);
+    btn.classList.remove('active');
+    addDebugInfo(`🔴 Capa ${nombreCapa} desactivada`);
+  } else {
+    map.addLayer(capa);
+    btn.classList.add('active');
+    addDebugInfo(`🟢 Capa ${nombreCapa} activada`);
+  }
+}
+
+// Cargar datos de salud
+async function cargarSalud() {
+  try {
+    addDebugInfo('🏥 Cargando datos de salud...');
+    
+    const res = await fetch(`${supabaseUrl}/rest/v1/salud_loja?select=*`, {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`
+      }
+    });
+    
+    if (!res.ok) {
+      throw new Error(`Error HTTP: ${res.status}`);
+    }
+    
+    const data = await res.json();
+    
+    if (!Array.isArray(data)) {
+      addDebugInfo("❌ SALUD: La respuesta no es un array");
+      return;
+    }
+    
+    addDebugInfo(`📊 Total de registros de salud: ${data.length}`);
+    
+    let marcadoresCargados = 0;
+    
+    data.forEach(e => {
+      const lat = parseFloat(e.LATGPS);
+      const lon = parseFloat(e.LONGPS);
+      
+      if (!lat || !lon || isNaN(lat) || isNaN(lon)) {
+        return;
+      }
+      
+      let iconHtml = '🏥';
+      const tipo = (e.TUN_DESCRI || '').toLowerCase();
+      
+      if (tipo.includes('centro')) {
+        iconHtml = '🏥';
+      } else if (tipo.includes('puesto')) {
+        iconHtml = '🩺';
+      } else if (tipo.includes('hospital') || tipo.includes('clínica')) {
+        iconHtml = '🏨';
+      } else if (tipo.includes('dispensario')) {
+        iconHtml = '💊';
+      }
+
+      const icon = L.divIcon({
+        html: `<div style="font-size:20px;">${iconHtml}</div>`,
+        iconSize: [20, 20],
+        className: 'salud-marker'
+      });
+
+      const marker = L.marker([lat, lon], { icon }).bindPopup(`
+        <div style="max-width: 250px;">
+          <strong>🏥 ${e.UNI_NOMBRE || 'Sin nombre'}</strong><br>
+          📍 ${e.UNI_DIRECC || 'Sin dirección'}<br>
+          ${e.CAN_DESCRI ? '🗺️ Cantón: ' + e.CAN_DESCRI + '<br>' : ''}
+          ${e.PARR_DESCR ? '📍 Parroquia: ' + e.PARR_DESCR + '<br>' : ''}
+          ${e.UNI_TELEFO ? '📞 Tel: ' + e.UNI_TELEFO + '<br>' : ''}
+          <small>📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}</small>
         </div>
-    </div>
+      `);
+      
+      capas.salud.addLayer(marker);
+      marcadoresCargados++;
+    });
+    
+    addDebugInfo(`✅ Marcadores de salud cargados: ${marcadoresCargados}`);
+    
+  } catch (error) {
+    addDebugInfo(`❌ ERROR cargando salud: ${error.message}`);
+  }
+}
+
+// Cargar farmacias
+async function cargarFarmacias() {
+  try {
+    addDebugInfo('💊 Cargando farmacias...');
+    
+    const res = await fetch(`${supabaseUrl}/rest/v1/farmacias_loja_julio2025_completo?select=*`, {
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` }
+    });
+    
+    if (!res.ok) {
+      throw new Error(`Error HTTP: ${res.status}`);
+    }
+    
+    const data = await res.json();
+    
+    if (!Array.isArray(data)) {
+      addDebugInfo("❌ FARMACIAS: La respuesta no es un array");
+      return;
+    }
+    
+    addDebugInfo(`📊 Total de farmacias: ${data.length}`);
+    
+    const hoy = new Date().toISOString().split('T')[0];
+    let farmaciasCargadas = 0;
+    
+    data.forEach(f => {
+      const [lon, lat] = f.geom?.coordinates || [];
+      if (!lat || !lon) return;
+      
+      const inicio = f.FECHA_INIC?.split('T')[0];
+      const fin = f.FECHA_FIN?.split('T')[0];
+      const enTurno = hoy >= inicio && hoy < fin;
+
+      let icon;
+      if (enTurno) {
+        icon = L.divIcon({
+          className: 'blinking-icon',
+          html: `<div style="font-size:20px;color:red;">💊</div>`,
+          iconSize: [20, 20]
+        });
+      } else {
+        icon = L.divIcon({
+          html: `<div style="background:blue;width:14px;height:14px;border-radius:50%;border:2px solid white;"></div>`,
+          iconSize: [14, 14]
+        });
+      }
+
+      L.marker([lat, lon], { icon }).bindPopup(`
+        <strong>${f.NOMBRE || 'Sin nombre'}</strong><br>
+        ${f.DIRECCION || ''}<br>
+        Tel: ${f.TELEFONO || ''}<br>
+        Turno: ${inicio} - ${fin}<br><br>
+        <button onclick="mostrarFormulario('${f.NOMBRE}', ${lat}, ${lon})" style="padding:4px 8px; background:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer;">
+          📢 Reportar problema
+        </button>
+      `).addTo(capas.farmacias);
+      
+      farmaciasCargadas++;
+    });
+    
+    addDebugInfo(`✅ Farmacias cargadas: ${farmaciasCargadas}`);
+    
+  } catch (error) {
+    addDebugInfo(`❌ ERROR cargando farmacias: ${error.message}`);
+  }
+}
+
+// Cargar cantones
+async function cargarCantones() {
+  try {
+    addDebugInfo('🗺️ Cargando cantones...');
+    
+    const res = await fetch(`${supabaseUrl}/rest/v1/cantones_loja?select=*`, {
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` }
+    });
+    
+    if (!res.ok) {
+      throw new Error(`Error HTTP: ${res.status}`);
+    }
+    
+    const data = await res.json();
+    
+    if (!Array.isArray(data)) {
+      addDebugInfo("❌ CANTONES: La respuesta no es un array");
+      return;
+    }
+    
+    addDebugInfo(`📊 Total de cantones: ${data.length}`);
+    
+    let cantonesCargados = 0;
+    
+    data.forEach(c => {
+      try {
+        const g = typeof c.geom === 'string' ? JSON.parse(c.geom) : c.geom;
+        if (!g) return;
+        
+        const layer = L.geoJSON(g, {
+          style: { color: '#ff7800', weight: 1, fillOpacity: 0.1 }
+        }).bindPopup(`<strong>${c.DPA_DESCAN || c.NOMBRE || 'Sin nombre'}</strong>`);
+        
+        capas.cantones.addLayer(layer);
+        cantonesCargados++;
+      } catch (e) {
+        addDebugInfo(`❌ Error procesando cantón: ${e.message}`);
+      }
+    });
+    
+    addDebugInfo(`✅ Cantones cargados: ${cantonesCargados}`);
+    
+  } catch (error) {
+    addDebugInfo(`❌ ERROR cargando cantones: ${error.message}`);
+  }
+}
+
+// Cargar laboratorios
+async function cargarLaboratorios() {
+  try {
+    addDebugInfo('🧪 Cargando laboratorios...');
+    
+    const res = await fetch(`${supabaseUrl}/rest/v1/laboratorios_loja?select=*`, {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`
+      }
+    });
+    
+    if (!res.ok) {
+      throw new Error(`Error HTTP: ${res.status}`);
+    }
+    
+    const data = await res.json();
+    
+    if (!Array.isArray(data)) {
+      addDebugInfo("❌ LABORATORIOS: La respuesta no es un array");
+      return;
+    }
+    
+    addDebugInfo(`📊 Total de laboratorios: ${data.length}`);
+    
+    let laboratoriosCargados = 0;
+    
+    data.forEach(e => {
+      // Intentar diferentes nombres de columnas para coordenadas
+      const lat = parseFloat(e.latgps || e.LATGPS || e.lat || e.latitude || e.LATITUDE);
+      const lon = parseFloat(e.longps || e.LONGPS || e.lon || e.longitude || e.LONGITUDE);
+      
+      if (!lat || !lon || isNaN(lat) || isNaN(lon)) {
+        addDebugInfo(`⚠️ Laboratorio sin coordenadas válidas: ${e.nombre || 'Sin nombre'}`);
+        return;
+      }
+
+      const icon = L.divIcon({ 
+        html: '<div style="font-size:18px;">🧪</div>', 
+        iconSize: [18, 18],
+        className: 'laboratorio-marker'
+      });
+      
+      const marker = L.marker([lat, lon], { icon }).bindPopup(`
+        <div style="max-width: 250px;">
+          <strong>🧪 ${e.nombre || e.NOMBRE || 'Laboratorio'}</strong><br>
+          📍 ${e.direccion || e.DIRECCION || 'Sin dirección'}<br>
+          ${e.telefono || e.TELEFONO ? '📞 Tel: ' + (e.telefono || e.TELEFONO) + '<br>' : ''}
+          <small>📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}</small>
+        </div>
+      `);
+      
+      capas.laboratorios.addLayer(marker);
+      laboratoriosCargados++;
+    });
+    
+    addDebugInfo(`✅ Laboratorios cargados: ${laboratoriosCargados}`);
+    
+  } catch (error) {
+    addDebugInfo(`❌ ERROR cargando laboratorios: ${error.message}`);
+  }
+}
+
+// Cargar provincias de Ecuador
+async function cargarProvincias() {
+  try {
+    addDebugInfo('🗺️ Cargando provincias de Ecuador...');
+    
+    const res = await fetch(`${supabaseUrl}/rest/v1/provincias_ec?select=*`, {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`
+      }
+    });
+    
+    if (!res.ok) {
+      throw new Error(`Error HTTP: ${res.status}`);
+    }
+    
+    const data = await res.json();
+    
+    if (!Array.isArray(data)) {
+      addDebugInfo("❌ PROVINCIAS: La respuesta no es un array");
+      return;
+    }
+    
+    addDebugInfo(`📊 Total de provincias: ${data.length}`);
+    
+    let provinciasCargadas = 0;
+    
+    data.forEach((p, index) => {
+      try {
+        // Intentar diferentes nombres de campo para geometría
+        const camposGeom = ['geom', 'geometry', 'geojson', 'shape', 'polygon', 'coordinates'];
+        let geom = null;
+        let campoUsado = '';
+        
+        for (const campo of camposGeom) {
+          if (p[campo]) {
+            geom = typeof p[campo] === 'string' ? JSON.parse(p[campo]) : p[campo];
+            campoUsado = campo;
+            break;
+          }
+        }
+        
+        if (!geom) {
+          if (index < 3) { // Solo mostrar los primeros 3 errores
+            addDebugInfo(`⚠️ Provincia ${index}: sin geometría válida`);
+          }
+          return;
+        }
+        
+        // Determinar si es la provincia de Loja para resaltarla
+        const nombreProvincia = p.nombre || p.NOMBRE || p.name || p.NAME || p.provincia || p.PROVINCIA || p.dpa_despro || p.DPA_DESPRO || 'Sin nombre';
+        const esLoja = nombreProvincia.toLowerCase().includes('loja');
+        
+        const layer = L.geoJSON(geom, {
+          style: { 
+            color: esLoja ? '#ff0000' : '#4CAF50',  // Rojo para Loja, verde para otras
+            weight: esLoja ? 3 : 1.5, 
+            fillOpacity: esLoja ? 0.2 : 0.05,
+            fillColor: esLoja ? '#ff0000' : '#4CAF50'
+          }
+        }).bindPopup(`
+          <div style="max-width: 250px;">
+            <strong>🗺️ ${nombreProvincia}</strong><br>
+            ${p.codigo || p.CODIGO || p.dpa_provin ? 'Código: ' + (p.codigo || p.CODIGO || p.dpa_provin) + '<br>' : ''}
+            ${p.capital || p.CAPITAL ? 'Capital: ' + (p.capital || p.CAPITAL) + '<br>' : ''}
+            ${p.superficie || p.SUPERFICIE ? 'Superficie: ' + (p.superficie || p.SUPERFICIE) + ' km²<br>' : ''}
+            ${p.poblacion || p.POBLACION ? 'Población: ' + (p.poblacion || p.POBLACION) + '<br>' : ''}
+            <small>Campo geom: ${campoUsado}</small>
+          </div>
+        `);
+        
+        capas.provincias.addLayer(layer);
+        provinciasCargadas++;
+        
+        if (esLoja) {
+          addDebugInfo(`🎯 Provincia de Loja encontrada y resaltada`);
+        }
+        
+      } catch (e) {
+        if (index < 3) { // Solo mostrar los primeros 3 errores
+          addDebugInfo(`❌ Error procesando provincia ${index}: ${e.message}`);
+        }
+      }
+    });
+    
+    addDebugInfo(`✅ Provincias cargadas: ${provinciasCargadas} de ${data.length}`);
+    
+    if (provinciasCargadas === 0) {
+      addDebugInfo('❌ No se pudo cargar ninguna provincia. Posibles causas:');
+      addDebugInfo('  - Los datos de geometría están en formato incorrecto');
+      addDebugInfo('  - Los campos de geometría tienen nombres diferentes');
+      addDebugInfo('  - Los datos no son válidos para Leaflet');
+    }
+    
+  } catch (error) {
+    addDebugInfo(`❌ ERROR cargando provincias: ${error.message}`);
+  }
+}
+async function cargarLimiteProvincial() {
+  try {
+    addDebugInfo('🧭 Cargando límite provincial...');
+    
+    // Intentar diferentes nombres de tabla posibles
+    const tablasLimite = [
+      'limite_provincial',
+      'limites_provinciales', 
+      'limite_loja',
+      'provincias',
+      'provincia_loja',
+      'boundaries',
+      'limites'
+    ];
+    
+    let dataEncontrada = null;
+    let tablaUsada = '';
+    
+    for (const tabla of tablasLimite) {
+      try {
+        addDebugInfo(`🔍 Probando tabla: ${tabla}`);
+        
+        const res = await fetch(`${supabaseUrl}/rest/v1/${tabla}?select=*`, {
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`
+          }
+        });
+        
+        addDebugInfo(`📡 Respuesta ${tabla}: ${res.status} ${res.statusText}`);
+        
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            dataEncontrada = data;
+            tablaUsada = tabla;
+            addDebugInfo(`✅ Datos encontrados en tabla: ${tabla} (${data.length} registros)`);
+            break;
+          } else {
+            addDebugInfo(`⚠️ Tabla ${tabla} existe pero está vacía`);
+          }
+        } else if (res.status === 404) {
+          addDebugInfo(`❌ Tabla ${tabla} no existe`);
+        } else {
+          addDebugInfo(`❌ Error en tabla ${tabla}: ${res.status}`);
+        }
+      } catch (e) {
+        addDebugInfo(`❌ Error consultando ${tabla}: ${e.message}`);
+      }
+    }
+    
+    if (!dataEncontrada) {
+      addDebugInfo('❌ No se encontraron datos de límites en ninguna tabla');
+      addDebugInfo('💡 Verifica que exista una tabla con datos geográficos de límites');
+      return;
+    }
+    
+    addDebugInfo(`📊 Usando tabla: ${tablaUsada} con ${dataEncontrada.length} registros`);
+    
+    // Mostrar estructura del primer registro para debug
+    if (dataEncontrada.length > 0) {
+      const primer = dataEncontrada[0];
+      addDebugInfo(`🔍 Estructura del primer registro:`);
+      addDebugInfo(`Campos disponibles: ${Object.keys(primer).join(', ')}`);
+      
+      // Buscar campos de geometría
+      const camposGeom = Object.keys(primer).filter(k => 
+        k.toLowerCase().includes('geom') || 
+        k.toLowerCase().includes('geometry') || 
+        k.toLowerCase().includes('shape') ||
+        k.toLowerCase().includes('polygon')
+      );
+      addDebugInfo(`🗺️ Campos de geometría encontrados: ${camposGeom.join(', ')}`);
+    }
+    
+    let limitesCargados = 0;
+    
+    dataEncontrada.forEach((d, index) => {
+      try {
+        // Intentar diferentes nombres de campo para geometría
+        const camposGeom = ['geom', 'geometry', 'geojson', 'shape', 'polygon', 'coordinates'];
+        let geom = null;
+        let campoUsado = '';
+        
+        for (const campo of camposGeom) {
+          if (d[campo]) {
+            geom = typeof d[campo] === 'string' ? JSON.parse(d[campo]) : d[campo];
+            campoUsado = campo;
+            break;
+          }
+        }
+        
+        if (!geom) {
+          if (index < 3) { // Solo mostrar los primeros 3 errores
+            addDebugInfo(`⚠️ Registro ${index}: sin geometría válida`);
+          }
+          return;
+        }
+        
+        addDebugInfo(`✅ Registro ${index}: usando campo '${campoUsado}' para geometría`);
+
+        const layer = L.geoJSON(geom, {
+          style: { 
+            color: '#ff0000',  // Rojo para que sea muy visible
+            weight: 4, 
+            fillOpacity: 0.1,
+            fillColor: '#ff0000',
+            dashArray: '10, 5'
+          }
+        }).bindPopup(`
+          <div>
+            <strong>🧭 Límite Provincial de Loja</strong><br>
+            Tabla: ${tablaUsada}<br>
+            ${d.nombre || d.NOMBRE || d.name || d.NAME || d.provincia || d.PROVINCIA || 'Límite administrativo'}<br>
+            <small>Campo geom: ${campoUsado}</small>
+          </div>
+        `);
+        
+        capas.limite.addLayer(layer);
+        limitesCargados++;
+        
+        if (index === 0) {
+          addDebugInfo('🎯 Ajustando vista al primer límite...');
+          // Ajustar vista al primer polígono cargado
+          setTimeout(() => {
+            try {
+              map.fitBounds(layer.getBounds(), { padding: [20, 20] });
+            } catch (e) {
+              addDebugInfo('⚠️ No se pudo ajustar la vista al límite');
+            }
+          }, 1000);
+        }
+        
+      } catch (e) {
+        if (index < 3) { // Solo mostrar los primeros 3 errores
+          addDebugInfo(`❌ Error procesando límite ${index}: ${e.message}`);
+        }
+      }
+    });
+    
+    addDebugInfo(`✅ Límites provinciales cargados: ${limitesCargados} de ${dataEncontrada.length}`);
+    
+    if (limitesCargados === 0) {
+      addDebugInfo('❌ No se pudo cargar ningún límite. Posibles causas:');
+      addDebugInfo('  - Los datos de geometría están en formato incorrecto');
+      addDebugInfo('  - Los campos de geometría tienen nombres diferentes');
+      addDebugInfo('  - Los datos no son válidos para Leaflet');
+    }
+    
+  } catch (error) {
+    addDebugInfo(`❌ ERROR general cargando límite provincial: ${error.message}`);
+  }
+}
+
+// Funciones del formulario
+function mostrarFormulario(nombre, lat, lon) {
+  document.getElementById('formulario-reporte').style.display = 'block';
+  document.getElementById('info-farmacia').innerText = `Reporte para: ${nombre} (Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)})`;
+  document.getElementById('nombre-farmacia').value = nombre;
+  document.getElementById('lat-farmacia').value = lat;
+  document.getElementById('lon-farmacia').value = lon;
+  addDebugInfo(`📝 Mostrando formulario para: ${nombre}`);
+}
+
+function cerrarFormulario() {
+  document.getElementById('formulario-reporte').style.display = 'none';
+  document.getElementById('observaciones').value = '';
+}
+
+async function enviarFormulario() {
+  const nombreFarmacia = document.getElementById('nombre-farmacia').value;
+  const latFarmacia = document.getElementById('lat-farmacia').value;
+  const lonFarmacia = document.getElementById('lon-farmacia').value;
+  const tipoProblema = document.getElementById('tipo-problema').value;
+  const observaciones = document.getElementById('observaciones').value;
+
+  if (!tipoProblema || !observaciones.trim()) {
+    alert('Por favor completa todos los campos.');
+    return;
+  }
+
+  addDebugInfo(`📤 Enviando reporte para ${nombreFarmacia}...`);
+
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/reportes_usuarios`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({
+        nombre: nombreFarmacia,
+        latitud: parseFloat(latFarmacia),
+        longitud: parseFloat(lonFarmacia),
+        tipo_problema: tipoProblema,
+        observaciones: observaciones,
+        fecha: new Date().toISOString()
+      })
+    });
+
+    if (response.ok) {
+      addDebugInfo('✅ Reporte enviado exitosamente');
+      alert('Reporte enviado con éxito. ¡Gracias!');
+      cerrarFormulario();
+    } else {
+      throw new Error(`Error HTTP: ${response.status}`);
+    }
+  } catch (e) {
+    addDebugInfo(`❌ Error al enviar reporte: ${e.message}`);
+    alert('Error al enviar el reporte. Inténtalo nuevamente.');
+  }
+}
+
+// Función para recargar datos
+function recargarDatos() {
+  addDebugInfo('🔄 Recargando todos los datos...');
+  
+  // Limpiar todas las capas
+  Object.values(capas).forEach(capa => capa.clearLayers());
+  
+  // Recargar todos los datos
+  Promise.all([
+    cargarSalud(),
+    cargarFarmacias(),
+    cargarCantones(),
+    cargarLaboratorios(),
+    cargarProvincias()
+  ]).then(() => {
+    addDebugInfo('✅ Recarga completa finalizada');
+  }).catch(error => {
+    addDebugInfo(`❌ Error en la recarga: ${error.message}`);
+  });
+}
+
+// Inicialización principal
+function iniciarAplicacion() {
+  addDebugInfo('🚀 Iniciando aplicación...');
+  
+  initializeMap();
+  
+  // Cargar todos los datos
+  Promise.all([
+    cargarSalud(),
+    cargarFarmacias(),
+    cargarCantones(),
+    cargarLaboratorios(),
+    cargarProvincias()
+  ]).then(() => {
+    addDebugInfo('✅ Todas las capas cargadas correctamente');
+  }).catch(error => {
+    addDebugInfo(`❌ Error en la carga inicial: ${error.message}`);
+  });
+}
+
+// Esperar a que se cargue el DOM
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', iniciarAplicacion);
+} else {
+  iniciarAplicacion();
+}
+</script>
 </body>
 </html>
